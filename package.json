@@ -1,0 +1,40 @@
+{
+  "name": "homebridge-tekmar-wifi",
+  "version": "0.1.0",
+  "description": "Homebridge plugin and CLI tool for controlling Tekmar WiFi thermostats via Watts Home API",
+  "keywords": [
+    "homebridge",
+    "tekmar",
+    "thermostat",
+    "watts",
+    "homekit",
+    "smart-home",
+    "iot"
+  ],
+  "author": "Sean McBride",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "watts-cli": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "commander": "^11.1.0",
+    "crypto": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  }
+}
+

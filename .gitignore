@@ -1,0 +1,48 @@
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment and config files (SENSITIVE DATA)
+config.json
+.env
+.env.local
+.env.*.local
+
+# API tokens and credentials
+tokens.json
+credentials.json
+auth-cache.json
+
+# Test output
+test-results/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+watts-cli.log
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Homebridge
+persist/
+accessories/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
