@@ -15,6 +15,9 @@ import {
 } from '../../types/api.js';
 
 const API_BASE = 'https://home.watts.com/api';
+const REQUEST_TIMEOUT_MS = 15000;
+const MAX_RETRIES = 2;
+const RETRY_STATUSES = [408, 429, 500, 502, 503, 504];
 
 export class WattsApiClient {
   private http: AxiosInstance;
@@ -28,6 +31,7 @@ export class WattsApiClient {
         'Api-Version': '2.0',
         'Content-Type': 'application/json',
       },
+      timeout: REQUEST_TIMEOUT_MS,
     });
 
     // Intercept requests to add authorization header
@@ -42,27 +46,51 @@ export class WattsApiClient {
    * Make authenticated API request
    */
   private async request<T>(config: AxiosRequestConfig): Promise<T> {
-    try {
-      const response = await this.http.request<ApiResponse<T>>(config);
-      const apiResponse = response.data;
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await this.http.request<ApiResponse<T>>({
+          timeout: REQUEST_TIMEOUT_MS,
+          ...config,
+        });
+        const apiResponse = response.data;
 
-      if (apiResponse.errorNumber !== 0) {
-        throw new Error(apiResponse.errorMessage || `API error: ${apiResponse.errorNumber}`);
-      }
-
-      return apiResponse.body;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          const apiResponse = error.response.data as ApiResponse<unknown>;
-          throw new Error(
-            apiResponse.errorMessage || `HTTP ${error.response.status}: ${error.response.statusText}`,
-          );
+        if (apiResponse.errorNumber !== 0) {
+          throw new Error(apiResponse.errorMessage || `API error: ${apiResponse.errorNumber}`);
         }
-        throw new Error(`Network error: ${error.message}`);
+
+        if (apiResponse.body === null || apiResponse.body === undefined) {
+          throw new Error('API returned empty body');
+        }
+
+        return apiResponse.body;
+      } catch (error) {
+        lastError = error;
+        const isAxios = axios.isAxiosError(error);
+        const status = isAxios ? error.response?.status : undefined;
+        const shouldRetry = attempt < MAX_RETRIES &&
+          (status === undefined || RETRY_STATUSES.includes(status));
+
+        if (shouldRetry) {
+          const backoff = 250 * (attempt + 1);
+          await new Promise(resolve => setTimeout(resolve, backoff));
+          continue;
+        }
+
+        if (isAxios) {
+          if (error.response) {
+            const apiResponse = error.response.data as ApiResponse<unknown>;
+            throw new Error(
+              apiResponse?.errorMessage || `HTTP ${error.response.status}: ${error.response.statusText}`,
+            );
+          }
+          throw new Error(`Network error: ${error.message}`);
+        }
+        throw error;
       }
-      throw error;
     }
+
+    throw lastError as Error;
   }
 
   /**

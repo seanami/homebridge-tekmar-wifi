@@ -13,6 +13,7 @@ export class TekmarThermostatAccessory {
   private deviceId: string;
   private cachedDevice: Device | null = null;
   private cacheTimestamp: number = 0;
+  private lastKnownData: Device['data'] | null = null;
   private readonly cacheTimeout = 5000; // 5 seconds
   private pollInterval: NodeJS.Timeout | null = null;
 
@@ -155,11 +156,14 @@ export class TekmarThermostatAccessory {
   private async getDeviceData(): Promise<Device['data'] | null> {
     try {
       const device = await this.getCachedDevice();
-      return device.data || null;
+      if (device.data) {
+        this.lastKnownData = device.data;
+      }
+      return device.data || this.lastKnownData;
     } catch (error: unknown) {
       const err = error as { message?: string };
       this.platform.log.error(`Failed to get device data for ${this.deviceId}:`, err.message || 'Unknown error');
-      return null;
+      return this.lastKnownData;
     }
   }
 
@@ -185,6 +189,9 @@ export class TekmarThermostatAccessory {
   private updateCache(device: Device) {
     this.cachedDevice = device;
     this.cacheTimestamp = Date.now();
+    if (device.data) {
+      this.lastKnownData = device.data;
+    }
   }
 
   /**
@@ -205,6 +212,35 @@ export class TekmarThermostatAccessory {
       return (tempC * 9 / 5) + 32;
     }
     return tempC;
+  }
+
+  /**
+   * Ensure threshold characteristics are present only when applicable (Auto mode)
+   */
+  private ensureThresholdCharacteristics(mode?: string) {
+    const isAuto = mode === 'Auto';
+    const coolingChar = this.platform.Characteristic.CoolingThresholdTemperature;
+    const heatingChar = this.platform.Characteristic.HeatingThresholdTemperature;
+
+    if (isAuto) {
+      if (!this.service.testCharacteristic(coolingChar)) {
+        const c = this.service.addCharacteristic(coolingChar);
+        c.setProps({ minValue: 10, maxValue: 35, minStep: 0.1 });
+        c.onSet(this.setCoolingThresholdTemperature.bind(this));
+      }
+      if (!this.service.testCharacteristic(heatingChar)) {
+        const h = this.service.addCharacteristic(heatingChar);
+        h.setProps({ minValue: 0, maxValue: 25, minStep: 0.1 });
+        h.onSet(this.setHeatingThresholdTemperature.bind(this));
+      }
+    } else {
+      if (this.service.testCharacteristic(coolingChar)) {
+        this.service.removeCharacteristic(this.service.getCharacteristic(coolingChar));
+      }
+      if (this.service.testCharacteristic(heatingChar)) {
+        this.service.removeCharacteristic(this.service.getCharacteristic(heatingChar));
+      }
+    }
   }
 
   /**
@@ -370,12 +406,14 @@ export class TekmarThermostatAccessory {
   private async setTargetTemperature(value: CharacteristicValue): Promise<void> {
     try {
       const data = await this.getDeviceData();
-      if (!data || !data.Mode || !data.Target) {
+      const characteristicMode = this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).value as number | undefined;
+      const mode = data?.Mode?.Val ?? (characteristicMode !== undefined ? this.modeValueMap[characteristicMode] : undefined);
+      const displayUnits = this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits).value as number | undefined;
+      const units = data?.TempUnits?.Val ?? (displayUnits === 1 ? 'F' : 'C');
+      const temp = this.convertFromCelsius(value as number, units);
+      if (!mode) {
         throw new Error('Device data not available');
       }
-      const mode = data.Mode.Val;
-      const units = data.TempUnits?.Val || 'C';
-      const temp = this.convertFromCelsius(value as number, units);
 
       this.platform.log.info(`Set TargetTemperature -> ${value}°C (${temp}°${units}, mode: ${mode})`);
 
@@ -389,7 +427,11 @@ export class TekmarThermostatAccessory {
       } else if (mode === 'Auto') {
         // In Auto mode, setting target temp should update heat threshold
         // Need to preserve cool threshold
-        const coolTemp = data.Target.Cool;
+        const coolTemp = data?.Target?.Cool ??
+          this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value as number | undefined;
+        if (coolTemp === undefined) {
+          throw new Error('Cooling threshold unavailable for Auto mode');
+        }
         updatedDevice = await apiClient.setDeviceAutoTemps(this.deviceId, temp, coolTemp);
       } else {
         throw new Error(`Cannot set temperature in ${mode} mode`);
@@ -443,7 +485,7 @@ export class TekmarThermostatAccessory {
   private async setCoolingThresholdTemperature(value: CharacteristicValue): Promise<void> {
     try {
       const data = await this.getDeviceData();
-      if (!data || !data.Target) {
+      if (!data) {
         throw new Error('Device data not available');
       }
       // Clamp the value before setting
@@ -458,7 +500,11 @@ export class TekmarThermostatAccessory {
 
       const apiClient = this.platform.getApiClient();
       // In Auto mode, always send both Heat and Cool values
-      const heatTemp = data.Target.Heat;
+      const heatTemp = data.Target?.Heat ??
+        this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value as number | undefined;
+      if (heatTemp === undefined) {
+        throw new Error('Heating threshold unavailable for Auto mode');
+      }
       const updatedDevice = await apiClient.setDeviceAutoTemps(this.deviceId, heatTemp, temp);
       this.updateCache(updatedDevice);
     } catch (error: unknown) {
@@ -508,7 +554,7 @@ export class TekmarThermostatAccessory {
   private async setHeatingThresholdTemperature(value: CharacteristicValue): Promise<void> {
     try {
       const data = await this.getDeviceData();
-      if (!data || !data.Target) {
+      if (!data) {
         throw new Error('Device data not available');
       }
       // Clamp the value before setting
@@ -523,7 +569,11 @@ export class TekmarThermostatAccessory {
 
       const apiClient = this.platform.getApiClient();
       // In Auto mode, always send both Heat and Cool values
-      const coolTemp = data.Target.Cool;
+      const coolTemp = data.Target?.Cool ??
+        this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value as number | undefined;
+      if (coolTemp === undefined) {
+        throw new Error('Cooling threshold unavailable for Auto mode');
+      }
       const updatedDevice = await apiClient.setDeviceAutoTemps(this.deviceId, temp, coolTemp);
       this.updateCache(updatedDevice);
     } catch (error: unknown) {
@@ -588,15 +638,26 @@ export class TekmarThermostatAccessory {
    */
   private async updateDeviceStatus() {
     try {
-      const data = await this.getDeviceData();
-      
+      let device: Device | null = null;
+      try {
+        device = await this.getCachedDevice();
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        this.platform.log.error(`Failed to fetch device ${this.deviceId}:`, err.message || 'Unknown error');
+        return;
+      }
+
+      const data = device.data ?? this.lastKnownData;
+      if (!device.data) {
+        this.platform.log.warn(`API returned empty data for ${this.deviceId}; using last known cache`);
+      }
+
       if (!data) {
         this.platform.log.warn(`Device data not available for ${this.deviceId}, skipping update`);
         return;
       }
 
-      // Update cache timestamp
-      const device = await this.getCachedDevice();
+      // Update cache timestamp and last known data
       this.updateCache(device);
 
       // Update all characteristics with null checks (like tado plugin does)
@@ -612,6 +673,7 @@ export class TekmarThermostatAccessory {
       if (data.Mode?.Val) {
         mode = this.modeMap[data.Mode.Val] ?? 0;
       }
+      this.ensureThresholdCharacteristics(data.Mode?.Val);
 
       let currentTemp: number | undefined;
       if (data.Sensors?.Room?.Val !== undefined && typeof data.Sensors.Room.Val === 'number') {
