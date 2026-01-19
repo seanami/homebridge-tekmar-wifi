@@ -4,20 +4,61 @@ Homebridge plugin and CLI tool for controlling Tekmar WiFi thermostats (561/562/
 
 ## Features
 
+- ✅ **Homebridge Plugin**: Full HomeKit integration for all Tekmar thermostats
 - ✅ **Full API Support**: Complete implementation of Watts Home API
 - ✅ **CLI Tool**: Command-line interface for testing and device control
-- ✅ **HomeKit Ready**: Library structure designed for Homebridge plugin development
 - ✅ **Authentication**: Programmatic OAuth 2.0 login with automatic token refresh
 - ✅ **Device Control**: Temperature, mode, fan, away mode, and floor heating controls
+- ✅ **Auto Discovery**: Automatically discovers all thermostats across all locations
 
 ## Installation
 
-### Prerequisites
+### Homebridge Plugin Installation
 
-- Node.js 18+ 
-- npm or yarn
+1. **Install via Homebridge UI:**
+   - Open Homebridge UI
+   - Go to Plugins
+   - Search for "homebridge-tekmar-wifi"
+   - Click Install
 
-### Setup
+2. **Or install via npm:**
+   ```bash
+   npm install -g homebridge-tekmar-wifi
+   ```
+
+3. **Configure the plugin:**
+   Add the following to your Homebridge `config.json`:
+
+   ```json
+   {
+     "platforms": [
+       {
+         "platform": "TekmarWiFi",
+         "name": "Tekmar WiFi",
+         "email": "your-email@example.com",
+         "password": "your-password",
+         "pollingInterval": 120,
+         "debug": false
+       }
+     ]
+   }
+   ```
+
+   **Configuration Options:**
+   - `platform` (required): Must be `"TekmarWiFi"`
+   - `name` (required): Display name for the platform
+   - `email` (required): Your Watts Home account email
+   - `password` (required): Your Watts Home account password
+   - `pollingInterval` (optional): How often to poll device status in seconds (default: 120, min: 30, max: 600)
+   - `debug` (optional): Enable debug logging (default: false)
+
+4. **Restart Homebridge:**
+   - The plugin will automatically discover all your Tekmar thermostats
+   - Each thermostat will appear as a separate accessory in HomeKit
+
+### Development Setup
+
+For development or CLI usage:
 
 ```bash
 # Clone the repository
@@ -32,6 +73,16 @@ npm run build
 ```
 
 ## Quick Start
+
+### Homebridge Plugin
+
+Once installed and configured, the plugin will:
+1. Authenticate with your Watts Home account
+2. Discover all locations and thermostats
+3. Create HomeKit accessories for each thermostat
+4. Automatically update device status via polling
+
+All thermostats will appear in the Home app and can be controlled via Siri, HomeKit automations, and the Home app.
 
 ### CLI Tool
 
@@ -104,10 +155,14 @@ await api.setDeviceTemperature(deviceId, 72, 75);
 │   │   └── index.ts              # CLI entry point
 │   ├── types/
 │   │   └── api.ts                # TypeScript definitions
-│   └── index.ts                   # Library exports
+│   ├── platform.ts                # Homebridge platform class
+│   ├── platformAccessory.ts       # Thermostat accessory implementation
+│   ├── settings.ts                # Platform constants
+│   └── index.ts                   # Plugin entry point & library exports
+├── config.schema.json             # Homebridge configuration schema
 ├── docs/                          # API documentation
 ├── dist/                          # Compiled JavaScript (generated)
-└── tokens.json                    # Stored tokens (git-ignored)
+└── tokens.json                    # Stored tokens (git-ignored, CLI only)
 ```
 
 ## Development
@@ -125,7 +180,8 @@ npm run clean
 
 ## Security
 
-- Authentication tokens are stored in `tokens.json` (git-ignored)
+- **Homebridge Plugin**: Authentication tokens are stored securely in Homebridge's storage directory with restricted file permissions (600)
+- **CLI Tool**: Authentication tokens are stored in `tokens.json` in the current working directory (git-ignored)
 - Never commit tokens, credentials, or personal information
 - Tokens automatically refresh when expired
 - All sensitive data is redacted from documentation
@@ -152,5 +208,40 @@ This project is for educational and interoperability purposes. Users should:
 
 ---
 
-**Status:** ✅ API fully implemented and tested  
-**Next Phase:** Homebridge plugin development
+## HomeKit Features
+
+The plugin exposes the following HomeKit characteristics for each thermostat:
+
+- **Current Temperature**: Real-time room temperature
+- **Target Temperature**: Set desired temperature
+- **Current Heating/Cooling State**: Shows if system is heating, cooling, or off
+- **Target Heating/Cooling State**: Set mode (Off, Heat, Cool, Auto)
+- **Heating Threshold Temperature**: Lower bound for Auto mode
+- **Cooling Threshold Temperature**: Upper bound for Auto mode
+- **Temperature Display Units**: Automatically matches device settings (Celsius/Fahrenheit)
+
+## Troubleshooting
+
+### Plugin Not Discovering Devices
+
+1. Check your email and password in the Homebridge config
+2. Enable debug logging: Set `"debug": true` in config
+3. Check Homebridge logs for authentication errors
+4. Verify your Watts Home account has access to the thermostats
+
+### Devices Not Responding
+
+1. Check if thermostats are online in the Watts Home app
+2. Verify network connectivity
+3. Check Homebridge logs for API errors
+4. Try increasing the `pollingInterval` if you're experiencing rate limiting
+
+### CLI Tool Issues
+
+- CLI uses separate token storage (in current working directory)
+- Run `watts-cli login` to authenticate separately from Homebridge
+- See [SETUP.md](SETUP.md) for detailed CLI usage
+
+---
+
+**Status:** ✅ Homebridge plugin fully implemented and ready for use

@@ -8,9 +8,8 @@
 import { Command } from 'commander';
 import * as readline from 'readline';
 import * as path from 'path';
-import { WattsAuth } from '../lib/api/auth';
-import { WattsApiClient } from '../lib/api/client';
-import { logger } from '../lib/logger';
+import { WattsAuth } from '../lib/api/auth.js';
+import { WattsApiClient } from '../lib/api/client.js';
 
 const program = new Command();
 
@@ -19,12 +18,13 @@ const auth = new WattsAuth();
 const api = new WattsApiClient(auth);
 
 // Helper to handle errors with log file info
-function handleError(error: any, context: string): never {
+function handleError(error: unknown, context: string): never {
+  const err = error as { message?: string; response?: { status?: number; statusText?: string } };
   const logFile = path.join(process.cwd(), 'watts-cli.log');
-  console.error(`\n${context}: ${error.message}`);
+  console.error(`\n${context}: ${err.message || 'Unknown error'}`);
   console.error(`\nDetailed error information has been logged to: ${logFile}`);
-  if (error.response) {
-    console.error(`HTTP Status: ${error.response.status} ${error.response.statusText}`);
+  if (err.response) {
+    console.error(`HTTP Status: ${err.response.status} ${err.response.statusText || ''}`);
   }
   process.exit(1);
 }
@@ -49,8 +49,9 @@ locationsCmd
         console.log(`    Away: ${loc.awayState === 1 ? 'Yes' : 'No'}`);
         console.log('');
       });
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -63,8 +64,9 @@ locationsCmd
       const away = state.toLowerCase() === 'on';
       const location = await api.setLocationAwayMode(locationId, away);
       console.log(`\nLocation "${location.name}" away mode set to: ${away ? 'ON' : 'OFF'}`);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -92,8 +94,9 @@ devicesCmd
           console.log('');
         });
       }
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -117,8 +120,9 @@ devicesCmd
       if (data.Sensors.Floor) {
         console.log(`  Floor Temp: ${data.Sensors.Floor.Val}°${data.TempUnits.Val}`);
       }
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -143,8 +147,9 @@ devicesCmd
         console.error('Device must be in Heat, Cool, or Auto mode to set temperature');
         process.exit(1);
       }
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -158,8 +163,9 @@ devicesCmd
       const device = await api.getDevice(deviceId);
       await api.setDeviceHeatTemp(deviceId, temperature);
       console.log(`\nSet heat temperature to ${temperature}°${device.data.TempUnits.Val}`);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -173,8 +179,9 @@ devicesCmd
       const device = await api.getDevice(deviceId);
       await api.setDeviceCoolTemp(deviceId, temperature);
       console.log(`\nSet cool temperature to ${temperature}°${device.data.TempUnits.Val}`);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -188,11 +195,12 @@ devicesCmd
       const cool = parseFloat(coolTemp);
       const device = await api.getDevice(deviceId);
       await api.setDeviceAutoTemps(deviceId, heat, cool);
-      console.log(`\nSet Auto mode thresholds:`);
+      console.log('\nSet Auto mode thresholds:');
       console.log(`  Heat: ${heat}°${device.data.TempUnits.Val}`);
       console.log(`  Cool: ${cool}°${device.data.TempUnits.Val}`);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -212,8 +220,9 @@ devicesCmd
       const modeValue = validMode.charAt(0).toUpperCase() + validMode.slice(1) as 'Off' | 'Heat' | 'Cool' | 'Auto';
       await api.setDeviceMode(deviceId, modeValue);
       console.log(`\nSet device mode to: ${modeValue}`);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -228,8 +237,9 @@ devicesCmd
       const device = await api.getDevice(deviceId);
       await api.setDeviceFloorMin(deviceId, temperature);
       console.log(`\nSet floor minimum temperature to ${temperature}°${device.data.TempUnits.Val}`);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -248,8 +258,9 @@ devicesCmd
       } else {
         console.log(`\nSet device away temperature to ${temperature}°${device.data.TempUnits.Val}`);
       }
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error(`Error: ${err.message || 'Unknown error'}`);
       process.exit(1);
     }
   });
@@ -280,7 +291,7 @@ program
       const tokens = await auth.login(email, password);
       console.log('Login successful!');
       console.log(`Token expires: ${new Date(tokens.expires_at * 1000).toLocaleString()}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleError(error, 'Login failed');
     }
   });
@@ -294,7 +305,7 @@ program
       const tokens = await auth.refreshToken();
       console.log('Token refreshed successfully!');
       console.log(`Token expires: ${new Date(tokens.expires_at * 1000).toLocaleString()}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleError(error, 'Token refresh failed');
     }
   });

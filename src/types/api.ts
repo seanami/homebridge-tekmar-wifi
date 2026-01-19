@@ -139,15 +139,15 @@ export interface DeviceSchedule {
   HeatActive: number;
   CoolActive: number;
   FloorActive: number;
-  Grp: any;
-  Event: any;
-  Grp1?: any;
-  Grp2?: any;
-  Grp3?: any;
-  Grp4?: any;
-  Grp5?: any;
-  Grp6?: any;
-  Grp7?: any;
+  Grp: unknown;
+  Event: unknown;
+  Grp1?: unknown;
+  Grp2?: unknown;
+  Grp3?: unknown;
+  Grp4?: unknown;
+  Grp5?: unknown;
+  Grp6?: unknown;
+  Grp7?: unknown;
   Floor: {
     W: number; // Floor minimum temp (W = "Warm"?)
     A: number; // Away temp (0 = not set)

@@ -7,16 +7,14 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { TokenResponse, StoredTokens } from '../../types/api';
-import { logger } from '../logger';
+import { TokenResponse, StoredTokens } from '../../types/api.js';
+import { logger } from '../logger.js';
 
-const TOKENS_FILE = path.join(process.cwd(), 'tokens.json');
 const CLIENT_ID = 'c832c38c-ce70-4ebc-83b6-b4548083ac90';
 const REDIRECT_URI = 'msalc832c38c-ce70-4ebc-83b6-b4548083ac90://auth';
 const SCOPE = 'https://wattsb2cap02.onmicrosoft.com/wattsapiresi/manage offline_access openid profile';
 const POLICY = 'B2C_1A_Residential_UnifiedSignUpOrSignIn';
 const LOGIN_BASE = 'https://login.watts.io';
-const API_BASE = 'https://home.watts.com';
 
 interface PKCEPair {
   challenge: string;
@@ -26,6 +24,19 @@ interface PKCEPair {
 export class WattsAuth {
   private tokens: StoredTokens | null = null;
   private codeVerifier: string | null = null;
+  private tokensFile: string;
+
+  constructor(storagePath?: string) {
+    if (storagePath) {
+      // Ensure directory exists
+      const tokensDir = path.join(storagePath, 'homebridge-tekmar-wifi');
+      this.tokensFile = path.join(tokensDir, 'tokens.json');
+      // Create directory with proper permissions (will be done on first save)
+    } else {
+      // Default: use process.cwd() for CLI compatibility
+      this.tokensFile = path.join(process.cwd(), 'tokens.json');
+    }
+  }
 
   /**
    * Generate PKCE challenge and verifier
@@ -59,7 +70,9 @@ export class WattsAuth {
    */
   private parseCookies(setCookieHeader: string | string[] | undefined): Record<string, string> {
     const cookies: Record<string, string> = {};
-    if (!setCookieHeader) return cookies;
+    if (!setCookieHeader) {
+      return cookies;
+    }
 
     // Handle array of Set-Cookie headers (axios returns array for multiple Set-Cookie headers)
     const cookieHeaders = Array.isArray(setCookieHeader)
@@ -97,7 +110,7 @@ export class WattsAuth {
    */
   async loadTokens(): Promise<StoredTokens | null> {
     try {
-      const data = await fs.readFile(TOKENS_FILE, 'utf-8');
+      const data = await fs.readFile(this.tokensFile, 'utf-8');
       this.tokens = JSON.parse(data);
       return this.tokens;
     } catch (error) {
@@ -113,7 +126,10 @@ export class WattsAuth {
    */
   async saveTokens(tokens: StoredTokens): Promise<void> {
     this.tokens = tokens;
-    await fs.writeFile(TOKENS_FILE, JSON.stringify(tokens, null, 2), {
+    // Ensure directory exists (for Homebridge storage path)
+    const tokensDir = path.dirname(this.tokensFile);
+    await fs.mkdir(tokensDir, { recursive: true, mode: 0o700 });
+    await fs.writeFile(this.tokensFile, JSON.stringify(tokens, null, 2), {
       mode: 0o600, // Restrictive permissions
     });
   }
@@ -178,7 +194,7 @@ export class WattsAuth {
       await this.saveTokens(tokens);
       await logger.info('Login successful, tokens saved');
       return tokens;
-    } catch (error: any) {
+    } catch (error: unknown) {
       await logger.error('Login failed', error);
       throw error;
     }
@@ -233,7 +249,7 @@ export class WattsAuth {
       });
 
       return { csrfToken, transId, cookies };
-    } catch (error: any) {
+    } catch (error: unknown) {
       await logger.error('Failed to get login page', error);
       throw error;
     }
@@ -248,7 +264,7 @@ export class WattsAuth {
     password: string,
     csrfToken: string,
     transId: string,
-    cookies: Record<string, string>
+    cookies: Record<string, string>,
   ): Promise<Record<string, string>> {
     const formData = new URLSearchParams({
       request_type: 'RESPONSE',
@@ -309,7 +325,7 @@ export class WattsAuth {
       });
 
       return updatedCookies;
-    } catch (error: any) {
+    } catch (error: unknown) {
       await logger.error('Failed to submit credentials', error);
       throw error;
     }
@@ -321,9 +337,10 @@ export class WattsAuth {
   private async getAuthorizationCode(
     csrfToken: string,
     transId: string,
-    cookies: Record<string, string>
+    cookies: Record<string, string>,
   ): Promise<string> {
-    const url = `${LOGIN_BASE}/tfp/wattsb2cap02.onmicrosoft.com/${POLICY}/api/CombinedSigninAndSignup/confirmed?rememberMe=false&csrf_token=${csrfToken}&tx=${encodeURIComponent(transId)}&p=${POLICY}`;
+    const baseUrl = `${LOGIN_BASE}/tfp/wattsb2cap02.onmicrosoft.com/${POLICY}`;
+    const url = `${baseUrl}/api/CombinedSigninAndSignup/confirmed?rememberMe=false&csrf_token=${csrfToken}&tx=${encodeURIComponent(transId)}&p=${POLICY}`;
 
     const headers = {
       'Cookie': this.formatCookies(cookies),
@@ -355,7 +372,7 @@ export class WattsAuth {
       }
 
       return decodeURIComponent(codeMatch[1]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       await logger.error('Failed to get authorization code', error);
       throw error;
     }
@@ -404,7 +421,7 @@ export class WattsAuth {
       });
 
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       await logger.error('Failed to exchange code for tokens', error);
       throw error;
     }
@@ -414,7 +431,7 @@ export class WattsAuth {
    * Refresh access token using refresh token
    */
   async refreshToken(): Promise<StoredTokens> {
-    let tokens = this.tokens || (await this.loadTokens());
+    const tokens = this.tokens || await this.loadTokens();
     if (!tokens) {
       throw new Error('No tokens found. Please run "watts-cli login" first.');
     }

@@ -1,0 +1,41 @@
+{
+  "pluginAlias": "TekmarWiFi",
+  "pluginType": "platform",
+  "singular": true,
+  "strictValidation": false,
+  "schema": {
+    "type": "object",
+    "required": ["name", "email", "password"],
+    "additionalProperties": false,
+    "properties": {
+      "name": {
+        "title": "Platform Name",
+        "type": "string",
+        "default": "Tekmar WiFi"
+      },
+      "email": {
+        "title": "Watts Home Email",
+        "type": "string",
+        "format": "email"
+      },
+      "password": {
+        "title": "Watts Home Password",
+        "type": "string",
+        "format": "password"
+      },
+      "pollingInterval": {
+        "title": "Polling Interval (seconds)",
+        "description": "How often to poll device status. Lower values = faster updates but more API calls. Default: 120 seconds (2 minutes). Minimum: 30 seconds, Maximum: 600 seconds (10 minutes).",
+        "type": "number",
+        "default": 120,
+        "minimum": 30,
+        "maximum": 600
+      },
+      "debug": {
+        "title": "Debug Logging",
+        "type": "boolean",
+        "default": false
+      }
+    }
+  }
+}

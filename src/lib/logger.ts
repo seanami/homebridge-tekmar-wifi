@@ -22,7 +22,7 @@ export class Logger {
     this.level = level;
   }
 
-  private async writeLog(level: string, message: string, data?: any): Promise<void> {
+  private async writeLog(level: string, message: string, data?: unknown): Promise<void> {
     const timestamp = new Date().toISOString();
     const logLine = `[${timestamp}] [${level}] ${message}`;
     const dataStr = data ? `\n${JSON.stringify(data, null, 2)}` : '';
@@ -44,34 +44,34 @@ export class Logger {
     }
   }
 
-  async debug(message: string, data?: any): Promise<void> {
+  async debug(message: string, data?: unknown): Promise<void> {
     if (this.level <= LogLevel.DEBUG) {
       await this.writeLog('DEBUG', message, data);
     }
   }
 
-  async info(message: string, data?: any): Promise<void> {
+  async info(message: string, data?: unknown): Promise<void> {
     if (this.level <= LogLevel.INFO) {
       await this.writeLog('INFO', message, data);
     }
   }
 
-  async warn(message: string, data?: any): Promise<void> {
+  async warn(message: string, data?: unknown): Promise<void> {
     if (this.level <= LogLevel.WARN) {
       await this.writeLog('WARN', message, data);
     }
   }
 
-  async error(message: string, error?: any): Promise<void> {
+  async error(message: string, error?: unknown): Promise<void> {
     if (this.level <= LogLevel.ERROR) {
       const errorData = error ? {
-        message: error.message || error,
-        stack: error.stack,
-        response: error.response ? {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          headers: error.response.headers,
-          data: error.response.data,
+        message: (error && typeof error === 'object' && 'message' in error) ? String(error.message) : String(error),
+        stack: (error && typeof error === 'object' && 'stack' in error) ? String(error.stack) : undefined,
+        response: (error && typeof error === 'object' && 'response' in error && error.response && typeof error.response === 'object') ? {
+          status: ('status' in error.response) ? error.response.status : undefined,
+          statusText: ('statusText' in error.response) ? error.response.statusText : undefined,
+          headers: ('headers' in error.response) ? error.response.headers : undefined,
+          data: ('data' in error.response) ? error.response.data : undefined,
         } : undefined,
       } : undefined;
       await this.writeLog('ERROR', message, errorData);
@@ -79,7 +79,7 @@ export class Logger {
   }
 
   // Convenience method for HTTP requests
-  async logRequest(method: string, url: string, headers?: any, body?: any): Promise<void> {
+  async logRequest(method: string, url: string, headers?: unknown, body?: unknown): Promise<void> {
     await this.debug(`HTTP ${method} ${url}`, {
       headers: this.sanitizeHeaders(headers),
       body: body,
@@ -87,7 +87,7 @@ export class Logger {
   }
 
   // Convenience method for HTTP responses
-  async logResponse(status: number, statusText: string, headers?: any, body?: any): Promise<void> {
+  async logResponse(status: number, statusText: string, headers?: unknown, body?: unknown): Promise<void> {
     await this.debug(`HTTP Response ${status} ${statusText}`, {
       headers: this.sanitizeHeaders(headers),
       body: body,
@@ -95,9 +95,11 @@ export class Logger {
   }
 
   // Sanitize headers to remove sensitive data
-  public sanitizeHeaders(headers: any): any {
-    if (!headers) return headers;
-    const sanitized = { ...headers };
+  public sanitizeHeaders(headers: unknown): Record<string, unknown> {
+    if (!headers || typeof headers !== 'object') {
+      return {};
+    }
+    const sanitized = { ...headers as Record<string, unknown> };
     if (sanitized.Authorization) {
       sanitized.Authorization = 'Bearer [REDACTED]';
     }
@@ -113,5 +115,5 @@ export class Logger {
 
 // Default logger instance
 export const logger = new Logger(
-  process.env.DEBUG ? LogLevel.DEBUG : LogLevel.INFO
+  process.env.DEBUG ? LogLevel.DEBUG : LogLevel.INFO,
 );

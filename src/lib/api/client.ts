@@ -4,7 +4,7 @@
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { WattsAuth } from './auth';
+import { WattsAuth } from './auth.js';
 import {
   ApiResponse,
   User,
@@ -12,8 +12,7 @@ import {
   Device,
   DeviceSummary,
   DeviceSettings,
-  LocationStateUpdate,
-} from '../../types/api';
+} from '../../types/api.js';
 
 const API_BASE = 'https://home.watts.com/api';
 
@@ -55,8 +54,10 @@ export class WattsApiClient {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         if (error.response) {
-          const apiResponse = error.response.data as ApiResponse<any>;
-          throw new Error(apiResponse.errorMessage || `HTTP ${error.response.status}: ${error.response.statusText}`);
+          const apiResponse = error.response.data as ApiResponse<unknown>;
+          throw new Error(
+            apiResponse.errorMessage || `HTTP ${error.response.status}: ${error.response.statusText}`,
+          );
         }
         throw new Error(`Network error: ${error.message}`);
       }
@@ -169,7 +170,6 @@ export class WattsApiClient {
   async setDeviceFloorMin(deviceId: string, temperature: number): Promise<Device> {
     // Need to read current device to preserve existing Floor.W value
     const device = await this.getDevice(deviceId);
-    const currentFloorW = device.data.Schedule.Floor.W;
 
     return this.updateDevice(deviceId, {
       Schedule: {
@@ -190,12 +190,11 @@ export class WattsApiClient {
 
     // Need to read current device to preserve existing Floor.W value
     const device = await this.getDevice(deviceId);
-    const currentFloorW = device.data.Schedule.Floor.W;
 
     return this.updateDevice(deviceId, {
       Schedule: {
         Floor: {
-          W: currentFloorW, // Preserve floor minimum
+          W: device.data.Schedule.Floor.W, // Preserve floor minimum
           A: awayTemp,
         },
       },
